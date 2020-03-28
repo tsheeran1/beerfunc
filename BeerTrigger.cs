@@ -7,29 +7,46 @@ using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using System.Net.Http;
 
 namespace tsheeran.beerfunc
 {
+    public class Root
+    {
+        public string Message { get; set; }
+        public Beer Data { get; set; }
+        public bool Success { get; set; }
+    }
+
+    public class Beer
+    {
+        public string Name { get; set; }
+        public string ABV { get; set; }
+        public Style Style { get; set; }
+    }
+
+    public class Style
+    {
+        public string Name { get; set; }
+        public string Description { get; set; }
+    }
+
     public static class BeerTrigger
     {
-        [FunctionName("BeerTrigger")]
+        [FunctionName("tsbeersite")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = null)] HttpRequest req,
             ILogger log)
         {
             log.LogInformation("C# HTTP trigger function processed a request.");
 
-            string name = req.Query["name"];
+            var breweryDbApiKey = Environment.GetEnvironmentVariable("BREWERY_DB_API_KEY");
+            var client = new HttpClient();
+            var response = await client.GetAsync($"https://sandbox-api.brewerydb.com/v2/beer/random?key={breweryDbApiKey}");
+            var responseString = await response.Content.ReadAsStringAsync();
+            var responseRoot = JsonConvert.DeserializeObject<Root>(responseString);
 
-            string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-            dynamic data = JsonConvert.DeserializeObject(requestBody);
-            name = name ?? data?.name;
-
-            string responseMessage = string.IsNullOrEmpty(name)
-                ? "This HTTP triggered function executed successfully. Pass a name in the query string or in the request body for a personalized response."
-                : $"Hello, {name}. This HTTP triggered function executed successfully.";
-
-            return new OkObjectResult(responseMessage);
+            return  (ActionResult)new OkObjectResult(responseRoot.Data);
         }
     }
 }
